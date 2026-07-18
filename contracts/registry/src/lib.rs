@@ -149,4 +149,56 @@ impl Registry {
         env.events()
             .publish((symbol_short!("attest"), voter), (id, approve));
     }
+
+    /// Settle a correction after its challenge window. No auth — anyone may
+    /// crank this; funds only ever move to recorded addresses.
+    /// Accept requires `approvals + rejections >= min_votes` and a strict
+    /// approval majority; accept refunds the stake, reject slashes it to
+    /// `slash_recipient`.
+    pub fn finalize(env: Env, id: u32) -> Status {
+        let cfg = config(&env);
+        let s = env.storage().persistent();
+
+        let ckey = DataKey::Correction(id);
+        let mut correction: Correction = s
+            .get(&ckey)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::BadId));
+        if correction.status != Status::Pending {
+            panic_with_error!(&env, Error::NotPending);
+        }
+        if env.ledger().timestamp() < correction.finalize_after {
+            panic_with_error!(&env, Error::WindowNotElapsed);
+        }
+
+        let accepted = correction.approvals + correction.rejections >= cfg.min_votes
+            && correction.approvals > correction.rejections;
+        let tok = token::Client::new(&env, &cfg.token);
+
+        if accepted {
+            correction.status = Status::Accepted;
+            tok.transfer(
+                &env.current_contract_address(),
+                &correction.contributor,
+                &correction.stake,
+            );
+            let akey = DataKey::AcceptedCount(correction.contributor.clone());
+            let accepted_count: u32 = s.get(&akey).unwrap_or(0);
+            s.set(&akey, &(accepted_count + 1));
+            bump(&env, &akey);
+        } else {
+            correction.status = Status::Rejected;
+            tok.transfer(
+                &env.current_contract_address(),
+                &cfg.slash_recipient,
+                &correction.stake,
+            );
+        }
+
+        s.set(&ckey, &correction);
+        bump(&env, &ckey);
+
+        env.events()
+            .publish((symbol_short!("final"),), (id, correction.status));
+        correction.status
+    }
 }
