@@ -5,6 +5,7 @@
 //! Flow: `submit` (staked) -> `attest` (challenge window) -> `finalize`
 //! (accept: stake refunded / reject: stake slashed to `slash_recipient`).
 
+mod test;
 mod types;
 
 use soroban_sdk::{
