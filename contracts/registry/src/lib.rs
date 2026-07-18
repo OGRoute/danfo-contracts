@@ -31,4 +31,26 @@ fn bump(env: &Env, key: &DataKey) {
 }
 
 #[contractimpl]
-impl Registry {}
+impl Registry {
+    /// One-shot initialization. Errors `AlreadyInitialized` on a second call.
+    pub fn init(env: Env, config: Config) {
+        if env.storage().instance().has(&DataKey::Config) {
+            panic_with_error!(&env, Error::AlreadyInitialized);
+        }
+        env.storage().instance().set(&DataKey::Config, &config);
+        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        env.events()
+            .publish((symbol_short!("init"),), config.admin);
+    }
+
+    /// Replace the configuration. Auth: current admin.
+    /// Used after deploy to point `slash_recipient` at the rewards pool.
+    pub fn set_config(env: Env, new_config: Config) {
+        let current = config(&env);
+        current.admin.require_auth();
+        env.storage().instance().set(&DataKey::Config, &new_config);
+        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        env.events()
+            .publish((symbol_short!("config"),), new_config.admin);
+    }
+}
