@@ -201,4 +201,45 @@ impl Registry {
             .publish((symbol_short!("final"),), (id, correction.status));
         correction.status
     }
+
+    /// Fetch a single correction. Errors `BadId` if it does not exist.
+    pub fn get(env: Env, id: u32) -> Correction {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Correction(id))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::BadId))
+    }
+
+    /// Total number of corrections ever submitted.
+    pub fn total(env: Env) -> u32 {
+        env.storage().persistent().get(&DataKey::Count).unwrap_or(0)
+    }
+
+    /// The most recent `n` corrections, newest first.
+    pub fn recent(env: Env, n: u32) -> Vec<Correction> {
+        let s = env.storage().persistent();
+        let count: u32 = s.get(&DataKey::Count).unwrap_or(0);
+        let n = n.min(count);
+        let mut out = Vec::new(&env);
+        let mut i = 0u32;
+        while i < n {
+            let id = count - 1 - i;
+            // Every id below count was written by submit; a miss is unreachable.
+            let c: Correction = s
+                .get(&DataKey::Correction(id))
+                .unwrap_or_else(|| panic_with_error!(&env, Error::BadId));
+            out.push_back(c);
+            i += 1;
+        }
+        out
+    }
+
+    /// `(submitted, accepted)` counts for an address — simple reputation.
+    pub fn reputation(env: Env, who: Address) -> (u32, u32) {
+        let s = env.storage().persistent();
+        (
+            s.get(&DataKey::SubmittedCount(who.clone())).unwrap_or(0),
+            s.get(&DataKey::AcceptedCount(who)).unwrap_or(0),
+        )
+    }
 }
