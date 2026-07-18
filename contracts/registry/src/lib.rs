@@ -7,7 +7,10 @@
 
 mod types;
 
-use soroban_sdk::{contract, contractimpl, panic_with_error, symbol_short, token, Env};
+use soroban_sdk::{
+    contract, contractimpl, panic_with_error, symbol_short, token, Address, BytesN, Env, String,
+    Vec,
+};
 
 pub use types::{Config, Correction, DataKey, Error, Kind, Status};
 use types::{TTL_EXTEND, TTL_THRESHOLD};
@@ -52,5 +55,61 @@ impl Registry {
         env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
         env.events()
             .publish((symbol_short!("config"),), new_config.admin);
+    }
+
+    /// Submit a correction, locking `stake_amount` of the config token.
+    /// Auth: `contributor`. Returns the new 0-based correction id.
+    pub fn submit(
+        env: Env,
+        contributor: Address,
+        route_id: String,
+        kind: Kind,
+        payload_hash: BytesN<32>,
+        summary: String,
+    ) -> u32 {
+        contributor.require_auth();
+        let cfg = config(&env);
+
+        token::Client::new(&env, &cfg.token).transfer(
+            &contributor,
+            &env.current_contract_address(),
+            &cfg.stake_amount,
+        );
+
+        let s = env.storage().persistent();
+        let id: u32 = s.get(&DataKey::Count).unwrap_or(0);
+        let now = env.ledger().timestamp();
+
+        let correction = Correction {
+            contributor: contributor.clone(),
+            route_id: route_id.clone(),
+            kind,
+            payload_hash,
+            summary,
+            stake: cfg.stake_amount,
+            status: Status::Pending,
+            submitted_at: now,
+            finalize_after: now + cfg.challenge_window,
+            approvals: 0,
+            rejections: 0,
+        };
+
+        let ckey = DataKey::Correction(id);
+        s.set(&ckey, &correction);
+        bump(&env, &ckey);
+
+        s.set(&DataKey::Count, &(id + 1));
+        bump(&env, &DataKey::Count);
+
+        let skey = DataKey::SubmittedCount(contributor.clone());
+        let submitted: u32 = s.get(&skey).unwrap_or(0);
+        s.set(&skey, &(submitted + 1));
+        bump(&env, &skey);
+
+        env.events().publish(
+            (symbol_short!("submit"), contributor),
+            (id, route_id, kind),
+        );
+        id
     }
 }
