@@ -112,4 +112,41 @@ impl Registry {
         );
         id
     }
+
+    /// Approve or reject a pending correction during its challenge window.
+    /// Auth: `voter`. One vote per address; contributors cannot vote on
+    /// their own corrections.
+    pub fn attest(env: Env, voter: Address, id: u32, approve: bool) {
+        voter.require_auth();
+        let s = env.storage().persistent();
+
+        let ckey = DataKey::Correction(id);
+        let mut correction: Correction = s
+            .get(&ckey)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::BadId));
+        if correction.status != Status::Pending {
+            panic_with_error!(&env, Error::NotPending);
+        }
+        if correction.contributor == voter {
+            panic_with_error!(&env, Error::SelfVote);
+        }
+
+        let vkey = DataKey::Voted(id, voter.clone());
+        if s.get::<_, bool>(&vkey).unwrap_or(false) {
+            panic_with_error!(&env, Error::AlreadyVoted);
+        }
+        s.set(&vkey, &true);
+        bump(&env, &vkey);
+
+        if approve {
+            correction.approvals += 1;
+        } else {
+            correction.rejections += 1;
+        }
+        s.set(&ckey, &correction);
+        bump(&env, &ckey);
+
+        env.events()
+            .publish((symbol_short!("attest"), voter), (id, approve));
+    }
 }
