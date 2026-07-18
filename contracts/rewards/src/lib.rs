@@ -76,9 +76,10 @@ impl Rewards {
             panic_with_error!(&env, Error::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Config, &config);
-        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
-        env.events()
-            .publish((symbol_short!("init"),), config.admin);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        env.events().publish((symbol_short!("init"),), config.admin);
     }
 
     /// Add funds to the reward pool. Auth: `sponsor`.
@@ -100,7 +101,9 @@ impl Rewards {
         cfg.admin.require_auth();
         cfg.reward_amount = amount;
         env.storage().instance().set(&DataKey::Config, &cfg);
-        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
         env.events().publish((symbol_short!("config"),), amount);
     }
 

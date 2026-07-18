@@ -42,9 +42,10 @@ impl Registry {
             panic_with_error!(&env, Error::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Config, &config);
-        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
-        env.events()
-            .publish((symbol_short!("init"),), config.admin);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        env.events().publish((symbol_short!("init"),), config.admin);
     }
 
     /// Replace the configuration. Auth: current admin.
@@ -53,7 +54,9 @@ impl Registry {
         let current = config(&env);
         current.admin.require_auth();
         env.storage().instance().set(&DataKey::Config, &new_config);
-        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND);
         env.events()
             .publish((symbol_short!("config"),), new_config.admin);
     }
@@ -107,10 +110,8 @@ impl Registry {
         s.set(&skey, &(submitted + 1));
         bump(&env, &skey);
 
-        env.events().publish(
-            (symbol_short!("submit"), contributor),
-            (id, route_id, kind),
-        );
+        env.events()
+            .publish((symbol_short!("submit"), contributor), (id, route_id, kind));
         id
     }
 
