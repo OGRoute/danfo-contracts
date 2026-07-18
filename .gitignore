@@ -1,0 +1,5 @@
+target/
+.stellar/
+*.optimized.wasm
+.env
+.env.*
