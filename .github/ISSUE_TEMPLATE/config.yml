@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/OGRoute/danfo-contracts/tree/main/docs
+    about: Protocol reference, contract API, and deployment guide.
+  - name: 🔐 Report a security vulnerability
+    url: https://github.com/OGRoute/danfo-contracts/blob/main/SECURITY.md
+    about: Do not open a public issue. Follow the disclosure process here.
+  - name: 🌊 Contributing via Drips Wave
+    url: https://github.com/OGRoute/danfo-contracts/blob/main/docs/contributing/drips-wave.md
+    about: How issues here are scoped, sized, and rewarded during a Wave.

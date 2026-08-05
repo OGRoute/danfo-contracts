@@ -1,0 +1,53 @@
+name: 🐛 Bug report
+description: Something in the contracts behaves differently from its documented contract.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do **not** use this form for security vulnerabilities — see
+        [SECURITY.md](https://github.com/OGRoute/danfo-contracts/blob/main/SECURITY.md).
+
+  - type: dropdown
+    id: contract
+    attributes:
+      label: Contract
+      options:
+        - danfo-registry
+        - danfo-rewards
+        - scripts/deploy.sh
+        - CI / tooling
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: Quote the doc comment or docs page that states the contract you expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the error code (e.g. `Error(Contract, #9)`) and any event payload.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: A failing `#[test]`, or the exact `stellar contract invoke` command.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Network, contract id, `rustc --version`, `stellar --version`.
+      placeholder: testnet, CA..., rustc 1.8x.0, stellar 22.x

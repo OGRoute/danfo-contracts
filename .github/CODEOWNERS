@@ -1,0 +1,8 @@
+# Every PR gets a review. Stake- and payout-handling code is reviewed with
+# the threat model in docs/protocol/threat-model.md open.
+
+*                        @OGRoute
+/contracts/registry/     @OGRoute
+/contracts/rewards/      @OGRoute
+/scripts/                @OGRoute
+/.github/                @OGRoute
