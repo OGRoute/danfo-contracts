@@ -8,7 +8,7 @@ mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
-    Address, Env,
+    Address, BytesN, Env,
 };
 
 /// Interface to danfo-registry, generated from its built wasm.
@@ -54,7 +54,10 @@ pub enum Error {
     NotAccepted = 3,
     AlreadyClaimed = 4,
     InsufficientPool = 5,
-    NotAdmin = 6,
+    /// `reward_amount` is not positive.
+    InvalidConfig = 6,
+    /// A funding amount is not positive.
+    InvalidAmount = 7,
 }
 
 #[contract]
@@ -70,10 +73,17 @@ fn config(env: &Env) -> RewardsConfig {
 
 #[contractimpl]
 impl Rewards {
-    /// One-shot initialization. Errors `AlreadyInitialized` on a second call.
+    /// One-shot initialization. Auth: the incoming `admin`, so a deploy
+    /// cannot be front-run into someone else's control. Errors
+    /// `AlreadyInitialized` on a second call, `InvalidConfig` on a
+    /// non-positive `reward_amount`.
     pub fn init(env: Env, config: RewardsConfig) {
         if env.storage().instance().has(&DataKey::Config) {
             panic_with_error!(&env, Error::AlreadyInitialized);
+        }
+        config.admin.require_auth();
+        if config.reward_amount <= 0 {
+            panic_with_error!(&env, Error::InvalidConfig);
         }
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage()
@@ -83,8 +93,13 @@ impl Rewards {
     }
 
     /// Add funds to the reward pool. Auth: `sponsor`.
+    /// Errors `InvalidAmount` on a non-positive amount — a negative transfer
+    /// would otherwise read as a withdrawal request.
     pub fn fund(env: Env, sponsor: Address, amount: i128) {
         sponsor.require_auth();
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
         let cfg = config(&env);
         token::Client::new(&env, &cfg.token).transfer(
             &sponsor,
@@ -95,10 +110,22 @@ impl Rewards {
             .publish((symbol_short!("fund"), sponsor), amount);
     }
 
+    /// Replace this contract's wasm. Auth: admin. The migration path off
+    /// unaudited testnet code without moving the pool's contract id.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
+        config(&env).admin.require_auth();
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        env.events().publish((symbol_short!("upgrade"),), ());
+    }
+
     /// Change the per-correction payout. Auth: admin.
+    /// Errors `InvalidConfig` on a non-positive amount.
     pub fn set_reward(env: Env, amount: i128) {
         let mut cfg = config(&env);
         cfg.admin.require_auth();
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidConfig);
+        }
         cfg.reward_amount = amount;
         env.storage().instance().set(&DataKey::Config, &cfg);
         env.storage()
@@ -144,6 +171,12 @@ impl Rewards {
             (symbol_short!("claim"),),
             (id, correction.contributor, cfg.reward_amount),
         );
+    }
+
+    /// The active configuration, so clients can read the live reward and
+    /// linked registry instead of hardcoding launch defaults.
+    pub fn get_config(env: Env) -> RewardsConfig {
+        config(&env)
     }
 
     /// Current pool balance.
