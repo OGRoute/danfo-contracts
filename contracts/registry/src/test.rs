@@ -10,6 +10,12 @@ use soroban_sdk::{
 const STAKE: i128 = 100;
 const WINDOW: u64 = 3600;
 
+/// 70 bytes — over `MAX_ROUTE_ID_LEN` (64). Seven groups of ten.
+const OVERLONG_ROUTE: &str =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+/// 290 bytes — over `MAX_SUMMARY_LEN` (280). Twenty-nine groups of ten.
+const OVERLONG_SUMMARY: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
 struct Setup<'a> {
     client: RegistryClient<'a>,
     token: TokenClient<'a>,
@@ -225,6 +231,180 @@ fn recent_returns_newest_first() {
     assert_eq!(recent.len(), 2);
     assert_eq!(recent.get(0).unwrap().contributor, bob);
     assert_eq!(recent.get(1).unwrap().contributor, alice);
+}
+
+/// Register an uninitialized registry, for tests that drive `init` itself.
+fn bare(env: &Env) -> (RegistryClient<'_>, Address, Address) {
+    env.mock_all_auths();
+    let admin = Address::generate(env);
+    let sac = env.register_stellar_asset_contract_v2(admin.clone());
+    let client = RegistryClient::new(env, &env.register(Registry, ()));
+    (client, admin, sac.address())
+}
+
+fn cfg(admin: &Address, token: &Address, stake: i128, window: u64, min_votes: u32) -> Config {
+    Config {
+        admin: admin.clone(),
+        token: token.clone(),
+        stake_amount: stake,
+        challenge_window: window,
+        min_votes,
+        slash_recipient: admin.clone(),
+    }
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn init_zero_stake_panics() {
+    let env = Env::default();
+    let (client, admin, token) = bare(&env);
+    client.init(&cfg(&admin, &token, 0, WINDOW, 2));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn init_zero_min_votes_panics() {
+    let env = Env::default();
+    let (client, admin, token) = bare(&env);
+    client.init(&cfg(&admin, &token, STAKE, WINDOW, 0));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn init_overlong_window_panics() {
+    let env = Env::default();
+    let (client, admin, token) = bare(&env);
+    client.init(&cfg(&admin, &token, STAKE, MAX_CHALLENGE_WINDOW + 1, 2));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #10)")]
+fn set_config_cannot_swap_token() {
+    let env = Env::default();
+    let s = setup(&env);
+    let other = env.register_stellar_asset_contract_v2(s.admin.clone());
+    s.client
+        .set_config(&cfg(&s.admin, &other.address(), STAKE, WINDOW, 2));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn set_config_rejects_invalid() {
+    let env = Env::default();
+    let s = setup(&env);
+    s.client
+        .set_config(&cfg(&s.admin, &s.token.address, STAKE, 0, 2));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #9)")]
+fn submit_empty_route_panics() {
+    let env = Env::default();
+    let s = setup(&env);
+    let alice = Address::generate(&env);
+    s.mint.mint(&alice, &1_000);
+    s.client.submit(
+        &alice,
+        &String::from_str(&env, ""),
+        &Kind::Fare,
+        &BytesN::from_array(&env, &[7u8; 32]),
+        &String::from_str(&env, "Fare is now 500 naira"),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #9)")]
+fn submit_overlong_route_panics() {
+    let env = Env::default();
+    let s = setup(&env);
+    let alice = Address::generate(&env);
+    s.mint.mint(&alice, &1_000);
+    s.client.submit(
+        &alice,
+        &String::from_str(&env, OVERLONG_ROUTE),
+        &Kind::Fare,
+        &BytesN::from_array(&env, &[7u8; 32]),
+        &String::from_str(&env, "Fare is now 500 naira"),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #9)")]
+fn submit_overlong_summary_panics() {
+    let env = Env::default();
+    let s = setup(&env);
+    let alice = Address::generate(&env);
+    s.mint.mint(&alice, &1_000);
+    s.client.submit(
+        &alice,
+        &String::from_str(&env, "cms-oshodi"),
+        &Kind::Fare,
+        &BytesN::from_array(&env, &[7u8; 32]),
+        &String::from_str(&env, OVERLONG_SUMMARY),
+    );
+}
+
+/// A rejected submit must not take the stake — the length guard runs before
+/// the transfer.
+#[test]
+fn rejected_submit_leaves_balance_untouched() {
+    let env = Env::default();
+    let s = setup(&env);
+    let alice = Address::generate(&env);
+    s.mint.mint(&alice, &1_000);
+    let bad = s.client.try_submit(
+        &alice,
+        &String::from_str(&env, ""),
+        &Kind::Fare,
+        &BytesN::from_array(&env, &[7u8; 32]),
+        &String::from_str(&env, "Fare is now 500 naira"),
+    );
+    assert!(bad.is_err());
+    assert_eq!(s.token.balance(&alice), 1_000);
+    assert_eq!(s.client.total(), 0);
+}
+
+#[test]
+fn page_walks_forward_and_stops_at_end() {
+    let env = Env::default();
+    let s = setup(&env);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    submit_one(&env, &s, &alice);
+    submit_one(&env, &s, &bob);
+    submit_one(&env, &s, &alice);
+
+    let first = s.client.page(&0, &2);
+    assert_eq!(first.len(), 2);
+    assert_eq!(first.get(0).unwrap().contributor, alice);
+    assert_eq!(first.get(1).unwrap().contributor, bob);
+
+    // A limit past the end is truncated, not an error.
+    assert_eq!(s.client.page(&2, &10).len(), 1);
+    // Starting past the end is an empty page, so an indexer can poll safely.
+    assert_eq!(s.client.page(&99, &10).len(), 0);
+}
+
+#[test]
+fn reads_are_clamped_and_report_state() {
+    let env = Env::default();
+    let s = setup(&env);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    submit_one(&env, &s, &alice);
+
+    // An absurd page size clamps to what exists instead of exhausting budget.
+    assert_eq!(s.client.recent(&u32::MAX).len(), 1);
+    assert_eq!(s.client.page(&0, &u32::MAX).len(), 1);
+
+    assert!(!s.client.has_voted(&0, &bob));
+    s.client.attest(&bob, &0, &true);
+    assert!(s.client.has_voted(&0, &bob));
+
+    let live = s.client.get_config();
+    assert_eq!(live.stake_amount, STAKE);
+    assert_eq!(live.challenge_window, WINDOW);
+    assert_eq!(live.min_votes, 2);
 }
 
 #[test]

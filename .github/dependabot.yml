@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    # soroban-env-host 22.x does not compile against ed25519-dalek 3.0.
+    # See the "Known pin" note in README.md before unignoring.
+    ignore:
+      - dependency-name: ed25519-dalek
+        versions: ["3.x"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"

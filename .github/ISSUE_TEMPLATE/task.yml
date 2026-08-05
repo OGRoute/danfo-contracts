@@ -1,0 +1,55 @@
+name: 🌊 Wave task
+description: A scoped unit of work ready for an outside contributor to pick up.
+title: "[area]: "
+labels: ["wave"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for work that is **ready to be solved by someone who has never
+        seen this repo**. If you cannot fill in "Definition of done" concretely,
+        the task is not scoped yet — open a discussion instead.
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Complexity
+      description: >
+        Maps to Drips Wave point values. Trivial = 100, Medium = 150, High = 200.
+      options:
+        - Trivial — under an hour, no protocol judgement required
+        - Medium — a few hours, touches one contract and its tests
+        - High — a day or more, cross-contract or changes storage layout
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this matters. Link the code with permalinks.
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      description: A checklist a reviewer can tick without asking follow-up questions.
+      value: |
+        - [ ] Behaviour implemented in `contracts/.../src/lib.rs`
+        - [ ] Doc comment states what it does, its auth, and its errors
+        - [ ] Test covers the happy path
+        - [ ] Test covers each new error path with `#[should_panic(expected = ...)]`
+        - [ ] `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings` pass
+        - [ ] Docs page under `docs/` updated if the public API changed
+    validations:
+      required: true
+
+  - type: textarea
+    id: pointers
+    attributes:
+      label: Where to start
+      description: The files to read first, and anything a newcomer would otherwise get wrong.
+    validations:
+      required: true

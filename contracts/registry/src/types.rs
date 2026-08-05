@@ -6,6 +6,18 @@ use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
 pub const TTL_THRESHOLD: u32 = 30 * 17280;
 pub const TTL_EXTEND: u32 = 90 * 17280;
 
+/// Upper bound on `route_id` bytes. Route slugs are short by construction
+/// ("cms-oshodi"); the cap stops unbounded strings inflating entry size.
+pub const MAX_ROUTE_ID_LEN: u32 = 64;
+/// Upper bound on `summary` bytes — one tweet-sized human sentence.
+pub const MAX_SUMMARY_LEN: u32 = 280;
+/// Largest page `recent` / `page` will return in one call, so a read can
+/// never be sized by untrusted input.
+pub const MAX_PAGE: u32 = 50;
+/// Longest permitted challenge window (30 days in seconds). Bounds both
+/// operator error and `submitted_at + challenge_window` overflow.
+pub const MAX_CHALLENGE_WINDOW: u64 = 30 * 24 * 60 * 60;
+
 /// What a correction changes in the knowledge base.
 #[contracttype]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -84,5 +96,11 @@ pub enum Error {
     NotPending = 5,
     SelfVote = 6,
     WindowNotElapsed = 7,
-    NotAdmin = 8,
+    /// A `Config` field is outside its permitted range.
+    InvalidConfig = 8,
+    /// `route_id` or `summary` is empty or over its length cap.
+    InvalidInput = 9,
+    /// `set_config` tried to change `token`; stakes are denominated in the
+    /// token held at submission, so it is fixed for the contract's life.
+    TokenImmutable = 10,
 }

@@ -3,3 +3,6 @@ target/
 *.optimized.wasm
 .env
 .env.*
+
+# Regenerated on every `cargo test`; not review input.
+test_snapshots/

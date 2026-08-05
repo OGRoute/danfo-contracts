@@ -1,0 +1,16 @@
+# GitBook space configuration.
+# Connect this repo under GitBook -> Space -> Integrations -> GitHub Sync,
+# pointing at the `main` branch. GitBook reads the tree below on every push.
+
+root: ./docs/
+
+structure:
+  readme: README.md
+  summary: SUMMARY.md
+
+redirects:
+  contributing: contributing/how-to-contribute.md
+  wave: contributing/drips-wave.md
+  registry: reference/registry.md
+  rewards: reference/rewards.md
+  errors: reference/errors.md

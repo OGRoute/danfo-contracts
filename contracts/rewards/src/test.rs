@@ -156,6 +156,52 @@ fn claim_empty_pool_panics() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn init_zero_reward_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(admin.clone());
+    let rewards = RewardsClient::new(&env, &env.register(Rewards, ()));
+    rewards.init(&RewardsConfig {
+        admin: admin.clone(),
+        token: sac.address(),
+        registry: Address::generate(&env),
+        reward_amount: 0,
+    });
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn fund_zero_panics() {
+    let env = Env::default();
+    let s = setup(&env);
+    s.rewards.fund(&s.sponsor, &0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn set_reward_negative_panics() {
+    let env = Env::default();
+    let s = setup(&env);
+    s.rewards.set_reward(&-1);
+}
+
+#[test]
+fn set_reward_changes_payout() {
+    let env = Env::default();
+    let s = setup(&env);
+    s.rewards.fund(&s.sponsor, &500);
+    s.rewards.set_reward(&(REWARD * 2));
+    assert_eq!(s.rewards.get_config().reward_amount, REWARD * 2);
+
+    accept_one(&env, &s);
+    let before = s.token.balance(&s.alice);
+    s.rewards.claim(&0);
+    assert_eq!(s.token.balance(&s.alice), before + REWARD * 2);
+}
+
+#[test]
 fn rejected_stake_slashes_into_pool() {
     let env = Env::default();
     let s = setup(&env);
