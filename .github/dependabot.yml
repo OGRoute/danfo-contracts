@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Hold new releases for a week: hijacked versions are usually
+    # caught and pulled within days. Security updates are not delayed.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
@@ -17,5 +21,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # Hold new releases for a week: hijacked versions are usually
+    # caught and pulled within days. Security updates are not delayed.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(ci)"
